@@ -20,6 +20,7 @@ import sys
 import build_feed
 import opt_prices
 import parse_zolushka
+import ru_content
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SA_JSON = os.environ.get(
@@ -88,6 +89,11 @@ def main():
     matched = opt_prices.merge(products, opt_map)
     print(f"  опт-цен подставлено: {matched} / {len(products)} "
           f"(снимок из opt_prices.json, обновляется вручную)", flush=True)
+
+    ru_map = ru_content.load()
+    ru_matched = ru_content.merge(products, ru_map)
+    print(f"  рос. версий подставлено: {ru_matched} / {len(products)} "
+          f"(снимок из ru_content.json, обновляется раз в неделю)", flush=True)
 
     # бэкап на диск ДО фида/таблицы — прогон может занять десятки минут,
     # сбой дальше не должен стоить всего разбора

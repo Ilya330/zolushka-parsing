@@ -152,7 +152,24 @@ def _extract_quantity(page_html):
     return dm.group(1) if dm else ""
 
 
-def parse_product(page_html, url):
+def _extract_internal_id(page_html):
+    """Тот самый ID, что видно на сайте (кнопка «купити»/лічильник кошика) —
+    НЕ itemprop="mpn" (це якийсь інший внутрішній артикул постачання).
+    Однаковий для укр./рос. версій одного товару (перевірено вручну)."""
+    m = re.search(r'j-buy-button-counter"[^>]*?data-id="(\d+)"', page_html, re.S)
+    if m:
+        return m.group(1)
+    m = re.search(r'j-buy-button-widget"[^>]*?data-id="(\d+)"', page_html, re.S)
+    return m.group(1) if m else ""
+
+
+def _extract_ru_url(page_html):
+    m = re.search(r'<link rel="alternate" hreflang="ru" href="([^"]+)"', page_html)
+    return html.unescape(m.group(1)) if m else ""
+
+
+def _parse_name_desc_features(page_html):
+    """Назва/опис/характеристики — однаково і для укр., і для рос. сторінки."""
     m = re.search(r"<h1[^>]*>(.*?)</h1>", page_html, re.S)
     name = html.unescape(re.sub(r"\s+", " ", m.group(1))).strip() if m else ""
 
@@ -182,6 +199,17 @@ def parse_product(page_html, url):
             v = html.unescape(re.sub(r"\s+", " ", v)).strip()
             if k:
                 features[k] = v
+    return name, desc, features
+
+
+def parse_ru_fields(page_html):
+    """Назва/опис/характеристики з рос. сторінки товару (/ru/...)."""
+    name, desc, features = _parse_name_desc_features(page_html)
+    return {"name_ru": name, "description_ru": desc, "characteristics_ru": features}
+
+
+def parse_product(page_html, url):
+    name, desc, features = _parse_name_desc_features(page_html)
 
     m = re.search(r'itemprop="availability"\s+href="[^"]*/(InStock|OutOfStock)"', page_html)
     # нет микроразметки — считаем как отсутствие в наличии (как у dasmart)
@@ -189,7 +217,8 @@ def parse_product(page_html, url):
 
     return {
         "url": url,
-        "id": _meta_content(page_html, "mpn"),
+        "ru_url": _extract_ru_url(page_html),
+        "id": _extract_internal_id(page_html),
         "vendorCode": _meta_content(page_html, "sku"),
         "name": name,
         "description": desc,

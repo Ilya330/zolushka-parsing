@@ -15,6 +15,7 @@ WORKSHEET = os.environ.get("ZOLUSHKA_WORKSHEET", "Zolushka")
 HEADERS = [
     "ID", "Артикул", "Назва", "Опис", "Характеристики", "Ціна", "Опт ціна",
     "Валюта", "Наявність", "Кількість", "Категорія", "Фото", "URL",
+    "Назва (РУ)", "Опис (РУ)", "Характеристики (РУ)", "URL (РУ)",
 ]
 
 
@@ -25,6 +26,14 @@ def product_to_row(p):
     chars = json.dumps(p.get("characteristics", {}), ensure_ascii=False)
     if len(chars) > CELL_LIMIT:
         chars = chars[:CELL_LIMIT]
+
+    desc_ru = p.get("description_ru", "")
+    if len(desc_ru) > CELL_LIMIT:
+        desc_ru = desc_ru[:CELL_LIMIT]
+    chars_ru = json.dumps(p.get("characteristics_ru", {}), ensure_ascii=False)
+    if len(chars_ru) > CELL_LIMIT:
+        chars_ru = chars_ru[:CELL_LIMIT]
+
     return [
         p.get("id", ""), p.get("vendorCode", ""), p.get("name", ""), desc, chars,
         p.get("price", ""), p.get("opt_price", ""), p.get("currency", ""),
@@ -32,6 +41,7 @@ def product_to_row(p):
         " > ".join(p.get("category_path") or []),
         ", ".join(p.get("images") or []),
         p.get("url", ""),
+        p.get("name_ru", ""), desc_ru, chars_ru, p.get("ru_url", ""),
     ]
 
 

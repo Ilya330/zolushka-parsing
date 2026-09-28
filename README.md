@@ -18,9 +18,12 @@ dasmart, — см. «Тайминг и частота» ниже.
 | `build_feed.py` | Синтетические ID категорий из breadcrumbs + сборка `public/feed.xml` |
 | `opt_prices.py` | Чтение снимка опт-цен `opt_prices.json` (обновляется вручную, см. ниже) |
 | `fetch_opt_prices.py` | Ручной инструмент: опт-цены с авторизованной сессией (кука — руками) |
+| `ru_content.py` | Чтение снимка рос. контента `ru_content.json` (обновляется раз в неделю) |
+| `fetch_ru_content.py` | Сбор назви/опису/характеристик с рос. версии карточек (URL — из таблицы) |
 | `sheets_util.py` | Запись листа в Google-таблицу (clear + запись чанками) |
 | `zolushka_to_sheets.py` | Формирование строк и запись листа «Zolushka» |
 | `run_zolushka.py` | Оркестратор: скрапинг → `zolushka_products.json` → `public/feed.xml` → таблица |
+| `.github/workflows/update-ru.yml` | Расписание 1×/неделю (вс. 05:00) для рос. контента |
 | `.github/workflows/update.yml` | Расписание 1×/сутки + деплой на Pages + keepalive |
 
 ## Какие поля собираются
@@ -31,7 +34,7 @@ schema.org и breadcrumbs, без хрупкого парсинга текста
 
 | Поле | Источник на странице |
 |---|---|
-| `id` | `<meta itemprop="mpn">` — внутренний числовой ID (не путать с артикулом) |
+| `id` | `data-id` кнопки «купити» (`.j-buy-button-counter`) — саме той ID, що видно на сайті. **Не** `itemprop="mpn"` (це інший внутрішній номер постачання, не збігається з видимим на сайті) |
 | `vendorCode` (артикул) | `<meta itemprop="sku">` |
 | `name` | `<h1>` |
 | `description` | `.product-description .text` **с HTML-розміткою як є** (не в текст) |
@@ -43,11 +46,29 @@ schema.org и breadcrumbs, без хрупкого парсинга текста
 | `quantity` | `data-max` у лічильника кількості біля кнопки «купити» (реальний залишок) |
 | `images` | усі `data-href` галереї (`.gallery__link.j-gallery-zoom`) — це «zoom»-якість, більша за прев'ю, і чесна (не розтягнута) |
 | `category_path` | breadcrumbs (`schema.org/BreadcrumbList`), без «Головна» і без самого товару |
+| `ru_url` | `<link rel="alternate" hreflang="ru">` — адреса рос. версії тієї ж картки (слаг іноді відрізняється від укр., просто префіксом `/ru/` не вивести) |
+| `name_ru` / `description_ru` / `characteristics_ru` | ті ж поля з рос. сторінки (`ru_url`) — окремий, більш рідкий снімок `ru_content.json`, див. «Рос. версія» нижче |
 
 Список товарних URL — не з категорій (там сітка товарів підвантажується
 ajax-віджетом, `Disallow`-нутим у `robots.txt`), а з
 `content/export/zolushka.com.ua/catalog-sitemap.xml` (~12 900 товарних URL
-без урахування `/ru/`-дублів).
+без урахування `/ru/`-дублів — рос. версію кожної картки знаходимо через
+`ru_url`, а не окремим проходом по сайту).
+
+## Рос. версія (name_ru / description_ru / characteristics_ru)
+
+Контент рос. версії майже не змінюється, а його збір подвоює кількість
+запитів до сайту (кожна картка + її `ru_url`) — тому це **окремий,
+щотижневий** прогін (`update-ru.yml`, неділя 05:00 по Києву), а не частина
+щоденного. `fetch_ru_content.py` бере пари (Артикул, URL (РУ)) прямо з
+уже заповненої таблиці (лист «Zolushka») — **не** обходить сайт заново
+заради списку URL. Результат — `ru_content.json` (комітиться в репо, як і
+`opt_prices.json`), щоденний `run_zolushka.py` підмішує його автоматично.
+
+```bash
+python3 fetch_ru_content.py --limit 50   # пробний прогін
+python3 fetch_ru_content.py              # повний -> ru_content.json
+```
 
 ## Антибот
 
