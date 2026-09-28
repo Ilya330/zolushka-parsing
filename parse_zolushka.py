@@ -70,12 +70,15 @@ def fetch(url, tries=4, extra_headers=None):
     """
     last = None
     for i in range(tries):
-        headers = {
-            "User-Agent": UA,
-            "Cookie": f"challenge_passed={get_cookie()}",
-        }
+        cookie = f"challenge_passed={get_cookie()}"
+        headers = {"User-Agent": UA}
         if extra_headers:
             headers.update(extra_headers)
+        if "Cookie" in (extra_headers or {}):
+            # антибот-кука обязана быть свежей — не даём чужой Cookie её затереть
+            headers["Cookie"] = f"{cookie}; {extra_headers['Cookie']}"
+        else:
+            headers["Cookie"] = cookie
         try:
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as r:
@@ -92,6 +95,8 @@ def fetch(url, tries=4, extra_headers=None):
             get_cookie(refresh=True)
             continue
         return body
+    if last is None:
+        last = RuntimeError(f"{url}: антибот-челлендж не пройден за {tries} попыток")
     raise last
 
 

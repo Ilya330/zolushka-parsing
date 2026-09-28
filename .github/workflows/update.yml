@@ -21,8 +21,9 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    # полный прогон ~70-90 минут + доповтор упавших по 429 — с запасом
-    timeout-minutes: 180
+    # первый реальный прогон (28.09.2026, GitHub-раннер) занял 2ч47м —
+    # дольше локальных 70-90 мин; берём лимит с запасом от этого числа
+    timeout-minutes: 300
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
