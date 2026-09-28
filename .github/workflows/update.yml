@@ -1,0 +1,77 @@
+name: Update feed
+
+on:
+  schedule:
+    # 1 раз в сутки: полный обход ~12 900 товаров занимает 70-90 минут и
+    # уже вызывал 429 от поставщика за час работы — гонять чаще решили не
+    # рисковать блокировкой (см. README)
+    - cron: "0 6 * * *"
+      timezone: "Europe/Kyiv"
+  workflow_dispatch: {}        # ручной запуск кнопкой в Actions
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    # полный прогон ~70-90 минут + доповтор упавших по 429 — с запасом
+    timeout-minutes: 180
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Write service-account key
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > service_account.json
+
+      - name: Build feed + update Google Sheet
+        run: python run_zolushka.py
+
+      # Фид публикуется, если собран, — даже когда упала запись в таблицу
+      # (public/feed.xml собирается до неё; в репо его нет, он в .gitignore).
+      - if: ${{ !cancelled() && hashFiles('public/feed.xml') != '' }}
+        uses: actions/configure-pages@v6
+      - if: ${{ !cancelled() && hashFiles('public/feed.xml') != '' }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: public
+
+      - id: deployment
+        if: ${{ !cancelled() && hashFiles('public/feed.xml') != '' }}
+        uses: actions/deploy-pages@v5
+
+  # GitHub отключает cron в публичном репозитории после 60 дней без коммитов
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Empty commit after 50 days without commits
+        run: |
+          days=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "последний коммит: $days дн. назад"
+          if [ "$days" -lt 50 ]; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "keepalive: $days дн. без коммитов, иначе GitHub отключит расписание"
+          git push
