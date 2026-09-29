@@ -1,0 +1,57 @@
+name: Update opt prices
+
+# Опт-цена доступна только залогиненным (вход защищён reCAPTCHA — программно
+# не логинимся никак), поэтому кука снимается руками и обновляется секретом
+# ZOLUSHKA_SESSION_COOKIE. Раз в неделю, а не ежедневно: опт по условиям
+# поставщика (/opt-dropshipping/) и так пересматривается не чаще, чем раз
+# в полугодие на аккаунт.
+on:
+  schedule:
+    - cron: "0 4 * * 0"       # воскресенье, 04:00 по Києву — до RU (05:00) и основного (06:00)
+      timezone: "Europe/Kyiv"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-opt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Write service-account key
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > service_account.json
+
+      # Список URL берём из уже заполненной таблицы (её каждый день обновляет
+      # update.yml) — сайт заново не обходим, только точки с ценой.
+      # Кука протухла -> --check выходит с ненулевым кодом -> job красный,
+      # это и есть сигнал сходить обновить ZOLUSHKA_SESSION_COOKIE вручную.
+      - name: Check session is still authenticated
+        env:
+          ZOLUSHKA_SESSION_COOKIE: ${{ secrets.ZOLUSHKA_SESSION_COOKIE }}
+        run: python fetch_opt_prices.py --check
+
+      - name: Fetch opt prices
+        env:
+          ZOLUSHKA_SESSION_COOKIE: ${{ secrets.ZOLUSHKA_SESSION_COOKIE }}
+        run: python fetch_opt_prices.py
+
+      - name: Commit opt_prices.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add opt_prices.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Еженедельное обновление опт-цен (opt_prices.json)"
+          git push
